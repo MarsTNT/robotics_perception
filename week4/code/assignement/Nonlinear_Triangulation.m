@@ -4,46 +4,46 @@ function X = Nonlinear_Triangulation(K, C1, R1, C2, R2, C3, R3, x1, x2, x3, X0)
 % 3D position
 % Inputs: 
 %     K - size (3 x 3) camera calibration (intrinsics) matrix
-%     x
 % Outputs: 
 %     X - siqze (N x 3) matrix of refined point 3D locations
-    b = [x1(1) x1(2) x2(1) x2(2) x3(1) x(2)]';
-
-    [u1; v1; w1] = KR1 *(X - C1 );
-    [u2; v2; w2] = KR2 *(X - C2 );
-    [u3; v3; w3] = KR3 *(X - C3 );
-    f_X = [u1/w1 v1/w1 u2/w2 v2/w2 u3/w3 v3/w3 ]';
-    R = [R1,R2,R3];
-    C = [C1,C2,C3];
-    J = Jacobian_Triangulation(C, R, K, X);
-    d_X = inv(J' * J) * J' * ( b - f_X);
-    
-    % Put it into a loop
-    X = X - d_X;
-end
-
-function X = Single_Point_Nonlinear_Triangulation(K, C1, R1, C2, R2, C3, R3, x1, x2, x3, X0)
-end
+    X = X0;
+    [N,~] = size(X);
+    for i = 1:N,
+        b = [x1(i,1) x1(i,2) x2(i,1) x2(i,2) x3(i,1) x3(i,2)]';
+        PR1 = K*R1 *(X(i,:) - C1 );    
+        PR2 = K*R2 *(X(i,:) - C2 );
+        PR3 = K*R3 *(X(i,:) - C3 );    
+        
+        %f_X = [u1/w1 v1/w1 u2/w2 v2/w2 u3/w3 v3/w3 ]';
+        f_X = [PR1(1)/PR1(3), PR1(2)/PR1(3),...
+               PR2(1)/PR2(3), PR2(2)/PR2(3),...
+               PR3(1)/PR3(3), PR3(2)/PR3(3)]';
+           
+        J1 = Jacobian_Triangulation(C1, R1, K, X(i,:));
+        J2 = Jacobian_Triangulation(C2, R2, K, X(i,:));
+        J3 = Jacobian_Triangulation(C3, R3, K, X(i,:));
+        J = [J1' J2' J3']';
+        
+        d_X = inv(J' * J) * J' * ( b - f_X);
+        X(i,:) = X(i,:) + d_X';
+    end
+end    
 
 function J = Jacobian_Triangulation(C, R, K, X)
      
     % For the ith camera optical center Ci and Orientation Ri
-    [l,r] = size(C);
-    Inter = zeros(l,3);
-    for i=1:length(l) 
-        [ui; vi; wi] = K * R(i,:) * (X - C(i,:));
-        [k11 k12 k13; k21 k22 k23; k31 k32 k33] = K;
-        f = k11;
-        px = k13;
-        py = k23;
-        [r11 r12 r13; r21 r22 r23; r31 r32 r33] = r;
+    M = K * R * (X - C);
+    ui = M(1);
+    vi = M(2);
+    wi = M(3);
+    f = K(1,1);
+    px = K(1,3);
+    py = K(2,3);
     
-        dwi = [r31 r32 r33];
-        dvi = [f*r21 + py*r31 f*r22 + py*r32 f*r23 + py*r33];
-        dui = [f*r11 + px*r31 f*r1 + px*r32 f*r13 + px*r33];
-        dfi = [ wi*dui - ui*dwi; wi*dvi - vi*dwi] ./ power(wi,2);
-        Inter(i,:) = dfi';
-    end
-    J = Inter';
+    dwi = [R(3,1) R(3,2) R(3,3)];
+    dvi = [f*R(2,1) + py*R(3,1) f*R(2,2) + py*R(3,2) f*R(2,3) + py*R(3,3)];
+    dui = [f*R(1,1) + px*R(3,1) f*R(1,2) + px*R(3,2) f*R(1,3) + px*R(3,3)];
+    J = [ wi*dui - ui*dwi; wi*dvi - vi*dwi] ./ power(wi,2);
+    
     
 end
